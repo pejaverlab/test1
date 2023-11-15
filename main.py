@@ -96,9 +96,67 @@ def compute_thresholds(l):
 import bisect
 
 
+def findPosterior(allthrs, thrs, xpos, xneg, g, increment, minpoints, gft, w):
+    
+    maxthrs = allthrs[0];
+    minthrs = allthrs[-1];
+    minwindow = 0.0
+    maxwindow = (maxthrs - minthrs)
+    #print("maxwindow: ", maxwindow)
+    lengthgnomad = len(g)
+
+    smallwindow = minwindow
+    bigwindow = maxwindow
+
+    # check that bigwindow works else we will have to return false
+    # if small window works, return smallwindow
+
+    maxiterations = 100
+    iterationNo = 0
+    pos = None
+    neg = None
+    while(bigwindow - smallwindow > increment*0.5):
+        #print("bigwindow smallwindow: ", bigwindow, smallwindow)
+        iterationNo += 1
+        if iterationNo > 100:
+            raise Exception("will have to address this\n")
+        currentWindow = (bigwindow + smallwindow)/2.0
+        #print("currentWindow: ", currentWindow)
+        lo = thrs - currentWindow
+        hi = thrs + currentWindow
+
+        c = None
+        if hi > maxthrs:
+            c = (maxthrs-lo)/(hi-lo)
+        elif lo < minthrs:
+            c = (hi-minthrs)/(hi-lo)
+        else:
+            c = 1
+            
+        if c <= 0:
+            raise Exception("Problem with computing c")
+
+        pos = bisect.bisect_right(xpos, hi) - bisect.bisect_left(xpos, lo)
+        neg = bisect.bisect_right(xneg, hi) - bisect.bisect_left(xneg, lo)
+        if pos + neg < c*minpoints:
+            smallwindow = currentWindow
+            continue
+        gfilterlen = bisect.bisect_right(g, hi) - bisect.bisect_left(g, lo)
+        if gfilterlen < gft*c*lengthgnomad:
+            smallwindow = currentWindow
+            continue
+
+        bigwindow = currentWindow
+
+    #print(thrs, bigwindow, smallwindow, maxthrs, minthrs ,pos, neg)
+    #xsprint("iterationNo: ",  iterationNo)
+    return pos/(pos + w*neg)
+
+
+
 def get_both_local_posteriors(x, y, g, thrs, w, minpoints, gft, increment):
 
-#    start = time.time()
+    start = time.time()
 
     xpos = np.sort(x[y==1])  #[x[i] for i in range(len(x)) if y[i] == 1]
     xneg = np.sort(x[y==0])  #[x[i] for i in range(len(x)) if y[i] == 0]
@@ -107,62 +165,13 @@ def get_both_local_posteriors(x, y, g, thrs, w, minpoints, gft, increment):
 
     post = np.zeros(len(thrs))
 
-    maxthrs = thrs[0];
-    minthrs = thrs[-1];
-    lengthgnomad = len(g);
-
     for i in range(len(thrs)):
-        halfwindow = 0;
-        lo = thrs[i] - halfwindow
-        hi = thrs[i] + halfwindow
-        while(True):
-            pos = bisect.bisect_right(xpos, hi) - bisect.bisect_left(xpos, lo)
-            neg = bisect.bisect_right(xneg, hi) - bisect.bisect_left(xneg, lo)
-            #pos1 = np.count_nonzero( (y==1) & (x >= lo) & (x <= hi)) 
-            #neg1 = np.count_nonzero( (y==0) & (x >= lo) & (x <= hi)) 
-            
-            #if pos != pos1:
-            #    print("pos: ", (pos, pos1)); 
-            #if neg != neg1:
-            #    print("neg: ", (neg, neg1)); 
 
-            c = None
-            if hi > maxthrs:
-                c = (maxthrs-lo)/(hi-lo)
-            elif lo < minthrs:
-                c = (hi-minthrs)/(hi-lo)
-            else:
-                c = 1
-        
-            if c <= 0:
-                raise Exception("Problem with computing c")
-
-
-            if pos + neg < c*minpoints:
-                halfwindow = halfwindow + increment
-                lo = thrs[i] - halfwindow
-                hi = thrs[i] + halfwindow
-                continue
-
-            gfilterlen = bisect.bisect_right(g, hi) - bisect.bisect_left(g, lo)
-
-            #if np.count_nonzero( (g >= lo) & (g <= hi)) < gft*c*lengthgnomad:
-            if gfilterlen < gft*c*lengthgnomad:
-                gnomad_condition = 0
-            else:
-                gnomad_condition = 1
-                
-            if pos + neg >= c*minpoints and gnomad_condition == 1:
-                break
-            else:
-                halfwindow = halfwindow + increment
-                lo = thrs[i] - halfwindow;
-                hi = thrs[i] + halfwindow;
-
-        post[i] = pos/(pos + w*neg)
-
- #   end = time.time()
- #   print("time taken: ", end - start)
+        post[i] = findPosterior(thrs, thrs[i], xpos, xneg, g, increment, minpoints, gft, w)
+    
+    #print(post)
+    end = time.time()
+    print("time taken: ", end - start)
     return post
 
 
@@ -192,9 +201,9 @@ def initialize(x_, y_, g_, w_, thrs_, minpoints_, gft_, increment_, B_):
 
 def get_both_bootstrapped_posteriors_parallel(x, y, g, w, thrs, minpoints, gft, increment, B):
     with Pool(192,initializer = initialize, initargs=(x, y, g, w, thrs, minpoints, gft, increment, B,),) as pool:
-        print(pool._processes)
+        #print(pool._processes)
         items = [i for i in range(B)]
-        ans = pool.map(get_both_bootstrapped_posteriors, items, 48)
+        ans = pool.map(get_both_bootstrapped_posteriors, items, 64)
         return np.array(ans)
 
 def get_both_bootstrapped_posteriors(seed):
@@ -215,6 +224,8 @@ def get_all_thresholds(posteriors, thrs, Post):
         posterior = posteriors[i]
         for j in range(len(Post)):
             idces = np.where(posterior < Post[j])[0]
+            if i == 0:
+                print("idces here: ", idces, Post[j])
             if len(idces) > 0 and idces[0] > 0:
                 thresh[i][j] = thrs[idces[0]-1]
             else:
@@ -278,26 +289,17 @@ def main():
     g = np.sort(np.array(g))
     xg = np.concatenate((x,g))
     thresholds = compute_thresholds(xg)
-    print(thresholds)
+    print("threshold size: ", len(thresholds))
 
     w = ( (1-alpha)*((y==1).sum()) ) /  ( alpha*((y==0).sum()) )
 
 
     increment = getIncrementValue(args.tool)
     print("increment: ", increment)
+    #print("thresholds: ", thresholds)
     posteriors_p = get_both_local_posteriors(x, y, g, thresholds, w, windowclinvarpoints, windowgnomadfraction, increment)
     posteriors_b = 1 - np.flip(posteriors_p)
-    print("posteriors: ", posteriors_p)
-
-
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots()
-    ax.plot(np.flip(thresholds),posteriors_b , linewidth=2.0)
-    plt.savefig(os.path.join(args.outdir,tool+"-benign.png"))
-    ax.clear()
-    ax.plot(thresholds,posteriors_p , linewidth=2.0)
-    plt.savefig(os.path.join(args.outdir, tool+"-pathogenic.png"))
-
+    #print("posteriors: ", posteriors_p)
 
     fname = os.path.join(args.outdir,tool + "-pathogenic.txt")
     tosave = np.array([thresholds,posteriors_p]).T
@@ -306,22 +308,43 @@ def main():
     tosave = np.array([np.flip(thresholds),posteriors_b]).T
     np.savetxt(fname,tosave , delimiter='\t', fmt='%f')
 
-    posteriors_p_bootstrap = get_both_bootstrapped_posteriors_parallel(x,y,g,w, thresholds, windowclinvarpoints, windowgnomadfraction, increment, B)
-
-    all_pathogenic = np.row_stack((posteriors_p, posteriors_p_bootstrap))
-    all_benign = 1 - np.flip(all_pathogenic, axis = 1)
-    
-
     Post_p = np.zeros(4)
     Post_b = np.zeros(4)
     for j in range(4):
         Post_p[j] = c ** (1 / 2 ** (j)) * alpha / ((c ** (1 / 2 ** (j)) - 1) * alpha + 1);
         Post_b[j] = (c ** (1 / 2 ** (j))) * (1 - alpha) /(((c ** (1 / 2 ** (j))) - 1) * (1 - alpha) + 1);
 
+    print("here")
+    print("posteriors_b: ", posteriors_b)
+    print("Post_p: ", Post_p)
+    print("Post_b: ", Post_b)
+
+    posteriors_p_bootstrap = get_both_bootstrapped_posteriors_parallel(x,y,g,w, thresholds, windowclinvarpoints, windowgnomadfraction, increment, B)
+
+    all_pathogenic = np.row_stack((posteriors_p, posteriors_p_bootstrap))
+    all_benign = 1 - np.flip(all_pathogenic, axis = 1)
+    
+
     pthresh = get_all_thresholds(all_pathogenic, thresholds, Post_p)
     bthresh = get_all_thresholds(all_benign, np.flip(thresholds), Post_b) 
 
     #np.set_printoptions(formatter={'float': lambda x: "{0:0.5f}".format(x)})
+
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    ax.plot(np.flip(thresholds),posteriors_b , linewidth=2.0)
+    #ax.hlines(bthresh[0],thresholds[-1], thresholds[0], color='r', linestyle='dashed')
+    ax.set_xlabel("score")
+    ax.set_ylabel("posterior")
+    ax.set_title(tool)
+    plt.savefig(os.path.join(args.outdir,tool+"-benign.png"))
+    ax.clear()
+    ax.plot(thresholds,posteriors_p , linewidth=2.0)
+    #ax.hlines(pthresh[0],thresholds[-1], thresholds[0], color='r', linestyle='dashed')
+    ax.set_xlabel("score")
+    ax.set_ylabel("posterior")
+    ax.set_title(tool)
+    plt.savefig(os.path.join(args.outdir, tool+"-pathogenic.png"))
 
     
     DiscountedThresholdP = get_discounted_thresholds(pthresh[1:], Post_p, B, discountonesided, 'pathogenic')
