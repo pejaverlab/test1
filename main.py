@@ -74,7 +74,7 @@ def getParser():
 
 def preprocess_data(x,y,g, toolname):
     if toolname == 'SIFT' or toolname == 'FATHMM':
-        x = [-e for e in s]
+        x = [-e for e in x]
         g = [-e for e in g]
 
     if toolname == 'EA1.0':
@@ -102,7 +102,6 @@ def findPosterior(allthrs, thrs, xpos, xneg, g, increment, minpoints, gft, w):
     minthrs = allthrs[-1];
     minwindow = 0.0
     maxwindow = (maxthrs - minthrs)
-    #print("maxwindow: ", maxwindow)
     lengthgnomad = len(g)
 
     smallwindow = minwindow
@@ -116,12 +115,10 @@ def findPosterior(allthrs, thrs, xpos, xneg, g, increment, minpoints, gft, w):
     pos = None
     neg = None
     while(bigwindow - smallwindow > increment*0.5):
-        #print("bigwindow smallwindow: ", bigwindow, smallwindow)
         iterationNo += 1
         if iterationNo > 100:
             raise Exception("will have to address this\n")
         currentWindow = (bigwindow + smallwindow)/2.0
-        #print("currentWindow: ", currentWindow)
         lo = thrs - currentWindow
         hi = thrs + currentWindow
 
@@ -148,30 +145,22 @@ def findPosterior(allthrs, thrs, xpos, xneg, g, increment, minpoints, gft, w):
 
         bigwindow = currentWindow
 
-    #print(thrs, bigwindow, smallwindow, maxthrs, minthrs ,pos, neg)
-    #xsprint("iterationNo: ",  iterationNo)
     return pos/(pos + w*neg)
 
 
 
 def get_both_local_posteriors(x, y, g, thrs, w, minpoints, gft, increment):
 
-    start = time.time()
-
     xpos = np.sort(x[y==1])  #[x[i] for i in range(len(x)) if y[i] == 1]
     xneg = np.sort(x[y==0])  #[x[i] for i in range(len(x)) if y[i] == 0]
 
     assert x.size == y.size
+    gsorted = np.sort(g)
 
     post = np.zeros(len(thrs))
-
     for i in range(len(thrs)):
-
-        post[i] = findPosterior(thrs, thrs[i], xpos, xneg, g, increment, minpoints, gft, w)
+        post[i] = findPosterior(thrs, thrs[i], xpos, xneg, gsorted, increment, minpoints, gft, w)
     
-    #print(post)
-    end = time.time()
-    print("time taken: ", end - start)
     return post
 
 
@@ -201,7 +190,6 @@ def initialize(x_, y_, g_, w_, thrs_, minpoints_, gft_, increment_, B_):
 
 def get_both_bootstrapped_posteriors_parallel(x, y, g, w, thrs, minpoints, gft, increment, B):
     with Pool(192,initializer = initialize, initargs=(x, y, g, w, thrs, minpoints, gft, increment, B,),) as pool:
-        #print(pool._processes)
         items = [i for i in range(B)]
         ans = pool.map(get_both_bootstrapped_posteriors, items, 64)
         return np.array(ans)
@@ -224,8 +212,6 @@ def get_all_thresholds(posteriors, thrs, Post):
         posterior = posteriors[i]
         for j in range(len(Post)):
             idces = np.where(posterior < Post[j])[0]
-            if i == 0:
-                print("idces here: ", idces, Post[j])
             if len(idces) > 0 and idces[0] > 0:
                 thresh[i][j] = thrs[idces[0]-1]
             else:
@@ -289,17 +275,13 @@ def main():
     g = np.sort(np.array(g))
     xg = np.concatenate((x,g))
     thresholds = compute_thresholds(xg)
-    print("threshold size: ", len(thresholds))
 
     w = ( (1-alpha)*((y==1).sum()) ) /  ( alpha*((y==0).sum()) )
 
 
     increment = getIncrementValue(args.tool)
-    print("increment: ", increment)
-    #print("thresholds: ", thresholds)
     posteriors_p = get_both_local_posteriors(x, y, g, thresholds, w, windowclinvarpoints, windowgnomadfraction, increment)
     posteriors_b = 1 - np.flip(posteriors_p)
-    #print("posteriors: ", posteriors_p)
 
     fname = os.path.join(args.outdir,tool + "-pathogenic.txt")
     tosave = np.array([thresholds,posteriors_p]).T
@@ -314,11 +296,6 @@ def main():
         Post_p[j] = c ** (1 / 2 ** (j)) * alpha / ((c ** (1 / 2 ** (j)) - 1) * alpha + 1);
         Post_b[j] = (c ** (1 / 2 ** (j))) * (1 - alpha) /(((c ** (1 / 2 ** (j))) - 1) * (1 - alpha) + 1);
 
-    print("here")
-    print("posteriors_b: ", posteriors_b)
-    print("Post_p: ", Post_p)
-    print("Post_b: ", Post_b)
-
     posteriors_p_bootstrap = get_both_bootstrapped_posteriors_parallel(x,y,g,w, thresholds, windowclinvarpoints, windowgnomadfraction, increment, B)
 
     all_pathogenic = np.row_stack((posteriors_p, posteriors_p_bootstrap))
@@ -327,8 +304,6 @@ def main():
 
     pthresh = get_all_thresholds(all_pathogenic, thresholds, Post_p)
     bthresh = get_all_thresholds(all_benign, np.flip(thresholds), Post_b) 
-
-    #np.set_printoptions(formatter={'float': lambda x: "{0:0.5f}".format(x)})
 
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots()
@@ -362,9 +337,9 @@ def main():
     np.savetxt(fname, bthresh , delimiter='\t', fmt='%f')
 
     fname = os.path.join(args.outdir,tool + "-pthreshdiscounted.txt")
-    np.savetxt(fname, pthresh , delimiter='\t', fmt='%f')
+    np.savetxt(fname, DiscountedThresholdP , delimiter='\t', fmt='%f')
     fname = os.path.join(args.outdir,tool + "-bthreshdiscounted.txt")
-    np.savetxt(fname, bthresh , delimiter='\t', fmt='%f')
+    np.savetxt(fname, DiscountedThresholdB , delimiter='\t', fmt='%f')
 
         
 
