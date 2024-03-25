@@ -4,6 +4,9 @@ import os
 import numpy as np
 import math
 import time
+import bisect
+from tavtigian import get_tavtigian_c
+from configmodule import ConfigModule
 
 
 def load_data(filepath):
@@ -93,7 +96,6 @@ def compute_thresholds(l):
     return th
 
     
-import bisect
 
 
 def findPosterior(allthrs, thrs, xpos, xneg, g, increment, minpoints, gft, w):
@@ -241,21 +243,32 @@ def get_discounted_thresholds(thresh, Post, B, discountonesided, tp):
     return DiscountedThreshold
 
 
-import configmodule
-
-
 def main():
 
     parser = getParser()
     args = parser.parse_args()
+    configmodule = ConfigModule()
     configmodule.load_config(args.configfile)
 
-    alpha = configmodule.alpha
-    c = configmodule.c
     B = configmodule.B
     discountonesided = configmodule.discountonesided
     windowclinvarpoints = configmodule.windowclinvarpoints
     windowgnomadfraction = configmodule.windowgnomadfraction
+
+    alpha = None
+    c = None
+    if (configmodule.emulate_tavtigian):
+        alpha = 0.1
+        c = 350
+    elif (configmodule.emulate_pejaver):
+        alpha = 0.0441
+        c = 1124
+    else:
+        alpha = configmodule.alpha
+        c = get_tavtigian_c(alpha)
+
+    print(c)
+    return
 
     tool = args.tool
     datadir = args.data_dir;
