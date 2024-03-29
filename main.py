@@ -7,7 +7,7 @@ import time
 import bisect
 from tavtigian import get_tavtigian_c
 from configmodule import ConfigModule
-
+from gaussiansmoothing import *
 
 def load_data(filepath):
     data = None
@@ -17,19 +17,6 @@ def load_data(filepath):
         f.close()
     return data
 
-
-def getIncrementValue(tool):
-
-    if tool == "CADDphred":
-        return 0.1
-
-    if tool == "BayesDel-noAF" or tool == "CADDraw" or tool == "phyloP100way" or tool == "FATHMM" or tool == "GERP++":
-        return 0.01
-
-    if tool == "EA1.0" or tool == "MutPred" or tool == "MutPred2.0" or tool == "PolyPhen2-HVAR" or tool == "REVEL" or tool == "VEST4" or  tool == "SIFT":
-        return 0.001
-
-    return 0.001
 
 def getParser():
     parser = argparse.ArgumentParser()
@@ -98,16 +85,15 @@ def compute_thresholds(l):
     
 
 
-def findPosterior(allthrs, thrs, xpos, xneg, g, increment, minpoints, gft, w):
+def findPosterior(allthrs, thrs, xpos, xneg, g, minpoints, gft, w):
     
     maxthrs = allthrs[0];
     minthrs = allthrs[-1];
-    minwindow = 0.0
-    maxwindow = (maxthrs - minthrs)
     lengthgnomad = len(g)
 
-    smallwindow = minwindow
-    bigwindow = maxwindow
+    smallwindow = 0.0
+    bigwindow = maxthrs - minthrs
+    #bigwindow = maxthrs - minthrs
 
     # check that bigwindow works else we will have to return false
     # if small window works, return smallwindow
@@ -116,13 +102,17 @@ def findPosterior(allthrs, thrs, xpos, xneg, g, increment, minpoints, gft, w):
     iterationNo = 0
     pos = None
     neg = None
-    while(bigwindow - smallwindow > increment*0.5):
+    eps = 0.000001
+
+    conditionSatisfied = False
+
+    while(bigwindow - smallwindow > eps):
         iterationNo += 1
         if iterationNo > 100:
             raise Exception("will have to address this\n")
         currentWindow = (bigwindow + smallwindow)/2.0
-        lo = thrs - currentWindow
-        hi = thrs + currentWindow
+        lo = thrs - currentWindow - (eps/2)
+        hi = thrs + currentWindow + (eps/2)
 
         c = None
         if hi > maxthrs:
@@ -140,6 +130,10 @@ def findPosterior(allthrs, thrs, xpos, xneg, g, increment, minpoints, gft, w):
         if pos + neg < c*minpoints:
             smallwindow = currentWindow
             continue
+
+        if gft is None:
+            continue
+
         gfilterlen = bisect.bisect_right(g, hi) - bisect.bisect_left(g, lo)
         if gfilterlen < gft*c*lengthgnomad:
             smallwindow = currentWindow
@@ -151,7 +145,7 @@ def findPosterior(allthrs, thrs, xpos, xneg, g, increment, minpoints, gft, w):
 
 
 
-def get_both_local_posteriors(x, y, g, thrs, w, minpoints, gft, increment):
+def get_both_local_posteriors(x, y, g, thrs, w, minpoints, gft):
 
     xpos = np.sort(x[y==1])  #[x[i] for i in range(len(x)) if y[i] == 1]
     xneg = np.sort(x[y==0])  #[x[i] for i in range(len(x)) if y[i] == 0]
@@ -161,14 +155,14 @@ def get_both_local_posteriors(x, y, g, thrs, w, minpoints, gft, increment):
 
     post = np.zeros(len(thrs))
     for i in range(len(thrs)):
-        post[i] = findPosterior(thrs, thrs[i], xpos, xneg, gsorted, increment, minpoints, gft, w)
+        post[i] = findPosterior(thrs, thrs[i], xpos, xneg, gsorted, minpoints, gft, w)
     
     return post
 
 
 from multiprocessing.pool import Pool
 
-def initialize(x_, y_, g_, w_, thrs_, minpoints_, gft_, increment_, B_):
+def initialize(x_, y_, g_, w_, thrs_, minpoints_, gft_, B_):
     global x
     global y
     global g
@@ -176,7 +170,6 @@ def initialize(x_, y_, g_, w_, thrs_, minpoints_, gft_, increment_, B_):
     global thrs
     global minpoints
     global gft
-    global increment
     global B
     x = x_
     y = y_
@@ -185,13 +178,12 @@ def initialize(x_, y_, g_, w_, thrs_, minpoints_, gft_, increment_, B_):
     thrs = thrs_
     minpoints  = minpoints_
     gft = gft_
-    increment = increment_
     B = B_
     
 
 
-def get_both_bootstrapped_posteriors_parallel(x, y, g, w, thrs, minpoints, gft, increment, B):
-    with Pool(192,initializer = initialize, initargs=(x, y, g, w, thrs, minpoints, gft, increment, B,),) as pool:
+def get_both_bootstrapped_posteriors_parallel(x, y, g, w, thrs, minpoints, gft, B):
+    with Pool(192,initializer = initialize, initargs=(x, y, g, w, thrs, minpoints, gft, B,),) as pool:
         items = [i for i in range(B)]
         ans = pool.map(get_both_bootstrapped_posteriors, items, 64)
         return np.array(ans)
@@ -201,7 +193,7 @@ def get_both_bootstrapped_posteriors(seed):
     qx = np.random.randint(0,len(x),len(x))
     qg = np.random.randint(0,len(g),len(g))
 
-    posteriors_p = get_both_local_posteriors(x[qx], y[qx], g[qg], thrs, w, minpoints, gft, increment)
+    posteriors_p = get_both_local_posteriors(x[qx], y[qx], g[qg], thrs, w, minpoints, gft)
 
     return posteriors_p
 
@@ -268,7 +260,6 @@ def main():
         c = get_tavtigian_c(alpha)
 
     print(c)
-    return
 
     tool = args.tool
     datadir = args.data_dir;
@@ -292,8 +283,8 @@ def main():
     w = ( (1-alpha)*((y==1).sum()) ) /  ( alpha*((y==0).sum()) )
 
 
-    increment = getIncrementValue(args.tool)
-    posteriors_p = get_both_local_posteriors(x, y, g, thresholds, w, windowclinvarpoints, windowgnomadfraction, increment)
+    posteriors_p = get_both_local_posteriors(x, y, g, thresholds, w, windowclinvarpoints, windowgnomadfraction)
+    posteriors_p_smooth = gaussian_kernel_smoothing(thresholds, posteriors_p, 5) # new line
     posteriors_b = 1 - np.flip(posteriors_p)
 
     fname = os.path.join(args.outdir,tool + "-pathogenic.txt")
@@ -309,7 +300,7 @@ def main():
         Post_p[j] = c ** (1 / 2 ** (j)) * alpha / ((c ** (1 / 2 ** (j)) - 1) * alpha + 1);
         Post_b[j] = (c ** (1 / 2 ** (j))) * (1 - alpha) /(((c ** (1 / 2 ** (j))) - 1) * (1 - alpha) + 1);
 
-    posteriors_p_bootstrap = get_both_bootstrapped_posteriors_parallel(x,y,g,w, thresholds, windowclinvarpoints, windowgnomadfraction, increment, B)
+    posteriors_p_bootstrap = get_both_bootstrapped_posteriors_parallel(x,y,g,w, thresholds, windowclinvarpoints, windowgnomadfraction, B)
 
     all_pathogenic = np.row_stack((posteriors_p, posteriors_p_bootstrap))
     all_benign = 1 - np.flip(all_pathogenic, axis = 1)
@@ -327,7 +318,8 @@ def main():
     ax.set_title(tool)
     plt.savefig(os.path.join(args.outdir,tool+"-benign.png"))
     ax.clear()
-    ax.plot(thresholds,posteriors_p , linewidth=2.0)
+    ax.plot(thresholds,posteriors_p , linewidth=2.0, color='b')
+    ax.plot(thresholds,posteriors_p_smooth , linewidth=2.0, color='r')
     #ax.hlines(pthresh[0],thresholds[-1], thresholds[0], color='r', linestyle='dashed')
     ax.set_xlabel("score")
     ax.set_ylabel("posterior")
