@@ -14,7 +14,7 @@ def compute_smooth_value(i,x,y,n):
     val = val/kernel_sum
     return val
 
-
+# n is the window size
 def gaussian_kernel_smoothing(x, y, n):
     y_smooth = [compute_smooth_value(i,x,y,n) for i in range(len(x))]
     return y_smooth

@@ -8,6 +8,7 @@ import bisect
 from tavtigian import get_tavtigian_c
 from configmodule import ConfigModule
 from gaussiansmoothing import *
+from multiprocessing.pool import Pool
 
 def load_data(filepath):
     data = None
@@ -93,7 +94,6 @@ def findPosterior(allthrs, thrs, xpos, xneg, g, minpoints, gft, w):
 
     smallwindow = 0.0
     bigwindow = maxthrs - minthrs
-    #bigwindow = maxthrs - minthrs
 
     # check that bigwindow works else we will have to return false
     # if small window works, return smallwindow
@@ -160,7 +160,6 @@ def get_both_local_posteriors(x, y, g, thrs, w, minpoints, gft):
     return post
 
 
-from multiprocessing.pool import Pool
 
 def initialize(x_, y_, g_, w_, thrs_, minpoints_, gft_, B_):
     global x
