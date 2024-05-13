@@ -143,6 +143,9 @@ def main():
     reverse = args.reverse
     clamp = args.clamp
     gaussian_smoothing = configmodule.gaussian_smoothing
+    pu_data_available = configmodule.pu_data_available
+    if pu_data_available:
+        assert pudatafile is not None
 
     labelleddata = load_data(os.path.join(datadir,labeldatafile))
     x = [float(e[0]) for e in labelleddata]
@@ -158,7 +161,7 @@ def main():
     w = ( (1-alpha)*((y==1).sum()) ) /  ( alpha*((y==0).sum()) )    
 
 
-    calib = LocalCalibration(alpha, c, reverse, clamp, windowclinvarpoints, windowgnomadfraction, gaussian_smoothing)
+    calib = LocalCalibration(alpha, c, reverse, clamp, windowclinvarpoints, windowgnomadfraction, gaussian_smoothing, )
     thresholds, posteriors_p = calib.fit(x,y,g,alpha)
     posteriors_b = 1 - np.flip(posteriors_p)
 

@@ -143,6 +143,9 @@ def main():
     reverse = args.reverse
     clamp = args.clamp
     gaussian_smoothing = configmodule.gaussian_smoothing
+    pu_data_available = configmodule.pu_data_available
+    if pu_data_available:
+        assert pudatafile is not None
 
     labelleddata = load_data(os.path.join(datadir,labeldatafile))
     x = [float(e[0]) for e in labelleddata]

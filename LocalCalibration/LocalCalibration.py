@@ -14,7 +14,7 @@ from multiprocessing.pool import Pool
 
 class LocalCalibration:
 
-    def __init__(self, alpha,c, reverse = None, clamp = None, windowclinvarpoints = 100, 
+    def __init__(self, alpha,c, reverse = None, clamp = None, windowclinvarpoints = 100,
                  windowgnomadfraction = 0.03, gaussian_smoothing = True, unlabelled_data=False):
         self.alpha = alpha
         self.c = c
@@ -84,7 +84,7 @@ class LocalCalibration:
                 smallwindow = currentWindow
                 continue
 
-            if gft is None:
+            if not self.unlabelled_data:
                 continue
 
             gfilterlen = bisect.bisect_right(g, hi) - bisect.bisect_left(g, lo)
@@ -127,6 +127,9 @@ class LocalCalibration:
 
 
     def fit(self, X_train, y_train, pu_data, alpha):
+
+        if self.unlabelled_data:
+            assert(pu_data is not None)
         # preprocess
         x,y,g = LocalCalibration.preprocess_data(X_train, y_train, pu_data, self.reverse, self.clamp)
         if alpha is None:
@@ -190,6 +193,8 @@ class LocalCalibrateThresholdComputation:
 
         if alpha is None:
             alpha = self.alpha
+        if self.unlabelled_data:
+            assert g is not None
         w = ( (1-alpha)*((y==1).sum()) ) /  ( alpha*((y==0).sum()) )
         xg = np.concatenate((x,g))
         
