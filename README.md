@@ -1,6 +1,8 @@
 This is a python version of [clingen-svi-comp_calibration](https://github.com/vpejaver/clingen-svi-comp_calibration)
 
 
+
+Description of Tuning Parameters defined in config.ini are as follows:
 ```python
 
 [tuningparameters]
@@ -22,7 +24,7 @@ windowgnomadfraction = 0.03  # For the adaptive	windows for computing the local 
 
 
 
-An example use of invoking Local Calibration Method:
+An example use of invoking Local Calibration Method. Refer examples/example2.py for the whole code
 
 
 ```python
