@@ -1,4 +1,5 @@
 from scipy.optimize import fsolve
+import numpy as np
 
 def evidence_to_plr(opvst, npsu, npm, npst, npvst):
     return opvst**( (npsu/8) + (npm/4) + (npst/2) + npvst )
@@ -16,3 +17,13 @@ def get_postP_moderate(c, prior):
 
 def get_tavtigian_c(prior):
     return fsolve(get_postP_moderate, 300 , args=(prior))
+
+def get_tavtigian_thresholds(c, alpha):
+
+    Post_p = np.zeros(4)
+    Post_b = np.zeros(4)
+    for j in range(4):
+        Post_p[j] = c ** (1 / 2 ** (j)) * alpha / ((c ** (1 / 2 ** (j)) - 1) * alpha + 1);
+        Post_b[j] = (c ** (1 / 2 ** (j))) * (1 - alpha) /(((c ** (1 / 2 ** (j))) - 1) * (1 - alpha) + 1);
+
+    return Post_p, Post_b

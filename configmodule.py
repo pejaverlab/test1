@@ -12,6 +12,7 @@ class ConfigModule:
         self.windowgnomadfraction = None
         self.emulate_tavtigian = None
         self.emulate_pejaver = None
+        self.gaussian_smoothing = None
 
     def load_config(self, filepath):
 
@@ -24,7 +25,7 @@ class ConfigModule:
         self.discountonesided = float(cfg['tuningparameters']['discountonesided'])
         self.windowclinvarpoints = int(cfg['tuningparameters']['windowclinvarpoints'])
         self.windowgnomadfraction = float(cfg['tuningparameters']['windowgnomadfraction'])
-
+        self.gaussian_smoothing = cfg['smoothing'].getboolean('gaussian_smoothing')
         #print(cfg['priorinfo']['emulate_tavtigian'])
 
         self.emulate_tavtigian = cfg['priorinfo'].getboolean('emulate_tavtigian')
