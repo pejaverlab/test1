@@ -5,11 +5,11 @@ import numpy as np
 import math
 import time
 import bisect
-from tavtigian import get_tavtigian_c, get_tavtigian_thresholds
-from configmodule import ConfigModule
-from gaussiansmoothing import *
+from LocalCalibration.tavtigian import get_tavtigian_c, get_tavtigian_thresholds
+from LocalCalibration.configmodule import ConfigModule
+from LocalCalibration.gaussiansmoothing import *
 from multiprocessing.pool import Pool
-from LocalCalibration import *
+from LocalCalibration.LocalCalibration import *
 import time
 
 
