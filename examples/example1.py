@@ -13,13 +13,24 @@ from LocalCalibration.LocalCalibration import *
 import time
 
 
-def load_data(filepath):
+def load_labelled_data(filepath):
     data = None
     with open(filepath, "r") as f:
         reader = csv.reader(f, delimiter='\t')
         data = list(reader)
         f.close()
-    return data
+    x = [float(e[0]) for e in data]
+    y = [int(e[1]) for e in data]
+    return x,y
+
+def load_unlabelled_data(filepath):
+    data = None
+    with open(filepath, "r") as f:
+        reader = csv.reader(f, delimiter='\t')
+        data = list(reader)
+        f.close()
+    g = [float(e[0]) for e in data]
+    return g
 
 
 def getParser():
@@ -139,11 +150,10 @@ def main():
 
 
 
-    labelleddata = load_data(labeldatafile)
-    x = [float(e[0]) for e in labelleddata]
-    y = [int(e[1]) for e in labelleddata]
-    udata = load_data(udatafile)
-    g = [float(e[0]) for e in udata if e[1] == '0']
+    x,y = load_labelled_data(labeldatafile)
+    g = load_unlabelled_data(udatafile)
+    print(g[:100])
+    #return
 
     x = np.array(x)
     y = np.array(y)
