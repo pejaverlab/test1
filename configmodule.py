@@ -13,7 +13,7 @@ class ConfigModule:
         self.emulate_tavtigian = None
         self.emulate_pejaver = None
         self.gaussian_smoothing = None
-        self.pu_data_available = None
+        self.data_smoothing = None
 
     def load_config(self, filepath):
 
@@ -21,19 +21,22 @@ class ConfigModule:
         cfg.read(filepath)
         cfg.sections()
         
-        #c = int(cfg['tuningparameters']['c'])
         self.B = int(cfg['tuningparameters']['B'])
         self.discountonesided = float(cfg['tuningparameters']['discountonesided'])
         self.windowclinvarpoints = int(cfg['tuningparameters']['windowclinvarpoints'])
-        #print(cfg['priorinfo']['emulate_tavtigian'])
 
         self.emulate_tavtigian = cfg['priorinfo'].getboolean('emulate_tavtigian')
         self.emulate_pejaver = cfg['priorinfo'].getboolean('emulate_pejaver')
+        assert not (self.emulate_tavtigian and self.emulate_pejaver)
+
         if not (self.emulate_tavtigian or self.emulate_pejaver):
             self.alpha = float(cfg['priorinfo']['alpha'])
-        
-        self.pu_data_available = cfg['smoothing'].getboolean['unlabelled_data']
-        self.windowgnomadfraction = float(cfg['smoothing']['windowgnomadfraction'])
+            assert self.alpha is not None
+            
+
+        self.data_smoothing = cfg['smoothing'].getboolean('data_smoothing')
+        if self.data_smoothing:
+            self.windowgnomadfraction = float(cfg['smoothing']['windowgnomadfraction'])
+            assert self.windowgnomadfraction is not None
         self.gaussian_smoothing = cfg['smoothing'].getboolean('gaussian_smoothing')
 
-        #print(self.emulate_tavtigian)
