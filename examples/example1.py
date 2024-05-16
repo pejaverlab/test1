@@ -5,11 +5,12 @@ import numpy as np
 import math
 import time
 import bisect
-from LocalCalibration.tavtigian import get_tavtigian_c, get_tavtigian_thresholds
+from Tavtigian.tavtigian import get_tavtigian_c, get_tavtigian_thresholds
 from configmodule import ConfigModule
 from LocalCalibration.gaussiansmoothing import *
 from multiprocessing.pool import Pool
-from LocalCalibration.LocalCalibration import *
+from LocalCalibration.LocalCalibration import LocalCalibration
+from Tavtigian.Tavtigian import LocalCalibrateThresholdComputation
 import time
 
 
@@ -108,8 +109,6 @@ def storeResults(outdir, tool, thresholds, posteriors_p, posteriors_b, pthresh, 
     np.savetxt(fname, DiscountedThresholdP , delimiter='\t', fmt='%f')
     fname = os.path.join(outdir,tool + "-bthreshdiscounted.txt")
     np.savetxt(fname, DiscountedThresholdB , delimiter='\t', fmt='%f')
-
-
 
 
 def main():
