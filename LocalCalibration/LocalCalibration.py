@@ -6,7 +6,6 @@ import math
 import time
 import bisect
 from .tavtigian import get_tavtigian_c
-from .configmodule import ConfigModule
 from .gaussiansmoothing import *
 from multiprocessing.pool import Pool
 
@@ -14,32 +13,28 @@ from multiprocessing.pool import Pool
 
 class LocalCalibration:
 
-    def __init__(self, alpha,c, reverse = None, clamp = None, windowclinvarpoints = 100,
-                 windowgnomadfraction = 0.03, gaussian_smoothing = True, unlabelled_data=False):
+    def __init__(self, alpha,c, reverse = None, windowclinvarpoints = 100,
+                 windowgnomadfraction = 0.03, gaussian_smoothing = True, pu_smoothing=False):
         self.alpha = alpha
         self.c = c
         self.reverse = reverse
-        self.clamp = clamp
         self.windowclinvarpoints = windowclinvarpoints
         self.windowgnomadfraction = windowgnomadfraction
         self.gaussian_smoothing = gaussian_smoothing
-        self.unlabelled_data = unlabelled_data
+        self.pu_smoothing = pu_smoothing
 
 
     @staticmethod
-    def preprocess_data(x,y,g,reverse, clamp):
+    def preprocess_data(x,y,g,reverse):
         if reverse:
             x = np.negative(x)
             g = np.negative(g)
             
-        if clamp:
-            g = g[g<=1]
-
         return x,y,g
 
 
     @staticmethod
-    def findPosterior(allthrs, thrs, xpos, xneg, g, minpoints, gft, w):
+    def findPosterior(allthrs, thrs, xpos, xneg, g, minpoints, gft, w, pu_smoothing):
     
         maxthrs = allthrs[0];
         minthrs = allthrs[-1];
@@ -84,13 +79,11 @@ class LocalCalibration:
                 smallwindow = currentWindow
                 continue
 
-            if not self.unlabelled_data:
-                continue
-
-            gfilterlen = bisect.bisect_right(g, hi) - bisect.bisect_left(g, lo)
-            if gfilterlen < gft*c*lengthgnomad:
-                smallwindow = currentWindow
-                continue
+            if pu_smoothing:
+                gfilterlen = bisect.bisect_right(g, hi) - bisect.bisect_left(g, lo)
+                if gfilterlen < gft*c*lengthgnomad:
+                    smallwindow = currentWindow
+                    continue
 
             bigwindow = currentWindow
 
@@ -100,7 +93,7 @@ class LocalCalibration:
 
 
     @staticmethod
-    def get_both_local_posteriors(x, y, g, thrs, w, minpoints, gft):
+    def get_both_local_posteriors(x, y, g, thrs, w, minpoints, gft=None, gaussian_smoothing = False, pu_smoothing = False):
         
         xpos = np.sort(x[y==1])  #[x[i] for i in range(len(x)) if y[i] == 1]
         xneg = np.sort(x[y==0])  #[x[i] for i in range(len(x)) if y[i] == 0]
@@ -110,9 +103,12 @@ class LocalCalibration:
         
         post = np.zeros(len(thrs))
         for i in range(len(thrs)):
-            post[i] = LocalCalibration.findPosterior(thrs, thrs[i], xpos, xneg, gsorted, minpoints, gft, w)
-            
+            post[i] = LocalCalibration.findPosterior(thrs, thrs[i], xpos, xneg, gsorted, minpoints, gft, w, pu_smoothing)
+
+        if gaussian_smoothing:
+            post = gaussian_kernel_smoothing(thrs, post, 5)
         return post
+        
 
 
     @staticmethod
@@ -128,17 +124,17 @@ class LocalCalibration:
 
     def fit(self, X_train, y_train, pu_data, alpha):
 
-        if self.unlabelled_data:
+        if self.pu_smoothing:
             assert(pu_data is not None)
         # preprocess
-        x,y,g = LocalCalibration.preprocess_data(X_train, y_train, pu_data, self.reverse, self.clamp)
+        x,y,g = LocalCalibration.preprocess_data(X_train, y_train, pu_data, self.reverse)
         if alpha is None:
             alpha = self.alpha
         w = ( (1-alpha)*((y==1).sum()) ) /  ( alpha*((y==0).sum()) )
         xg = np.concatenate((x,g))
         thresholds = self.compute_thresholds(xg)
 
-        posteriors_p = self.get_both_local_posteriors(x, y, g, thresholds, w, self.windowclinvarpoints, self.windowgnomadfraction)
+        posteriors_p = self.get_both_local_posteriors(x, y, g, thresholds, w, self.windowclinvarpoints, self.windowgnomadfraction, self.gaussian_smoothing, self.pu_smoothing)
         return thresholds, posteriors_p
 
 
@@ -146,21 +142,20 @@ class LocalCalibration:
 class LocalCalibrateThresholdComputation:
 
 
-    def __init__(self, alpha,c, reverse = None, clamp = None, windowclinvarpoints = 100, 
-                 windowgnomadfraction = 0.03, gaussian_smoothing = True, unlabelled_data=False):
+    def __init__(self, alpha,c, reverse = None, windowclinvarpoints = 100, 
+                 windowgnomadfraction = 0.03, gaussian_smoothing = True, pu_smoothing=False):
 
         self.alpha = alpha
         self.c = c
         self.reverse = reverse
-        self.clamp = clamp
         self.windowclinvarpoints = windowclinvarpoints
         self.windowgnomadfraction = windowgnomadfraction
         self.gaussian_smoothing = gaussian_smoothing
-        self.unlabelled_data = unlabelled_data
+        self.pu_smoothing = pu_smoothing
 
 
     @staticmethod
-    def initialize(x_, y_, g_, w_, thrs_, minpoints_, gft_, B_):
+    def initialize(x_, y_, g_, w_, thrs_, minpoints_, gft_, B_, pu_smoothing_):
         global x
         global y
         global g
@@ -169,6 +164,7 @@ class LocalCalibrateThresholdComputation:
         global minpoints
         global gft
         global B
+        global pu_smoothing
         x = x_
         y = y_
         g = g_
@@ -177,6 +173,7 @@ class LocalCalibrateThresholdComputation:
         minpoints  = minpoints_
         gft = gft_
         B = B_
+        pu_smoothing = pu_smoothing_
 
 
     @staticmethod
@@ -185,7 +182,7 @@ class LocalCalibrateThresholdComputation:
         np.random.seed(seed)
         qx = np.random.randint(0,len(x),len(x))
         qg = np.random.randint(0,len(g),len(g))
-        posteriors_p = LocalCalibration.get_both_local_posteriors(x[qx], y[qx], g[qg], thrs, w, minpoints, gft)
+        posteriors_p = LocalCalibration.get_both_local_posteriors(x[qx], y[qx], g[qg], thrs, w, minpoints, gft, pu_smoothing)
         return posteriors_p
 
 
@@ -193,7 +190,7 @@ class LocalCalibrateThresholdComputation:
 
         if alpha is None:
             alpha = self.alpha
-        if self.unlabelled_data:
+        if self.pu_smoothing:
             assert g is not None
         w = ( (1-alpha)*((y==1).sum()) ) /  ( alpha*((y==0).sum()) )
         xg = np.concatenate((x,g))
@@ -202,7 +199,7 @@ class LocalCalibrateThresholdComputation:
             thresholds = LocalCalibration.compute_thresholds(xg)
 
         ans = None
-        with Pool(192,initializer = self.initialize, initargs=(x, y, g, w, thresholds, self.windowclinvarpoints, self.windowgnomadfraction, B,),) as pool:
+        with Pool(192,initializer = self.initialize, initargs=(x, y, g, w, thresholds, self.windowclinvarpoints, self.windowgnomadfraction, B, self.pu_smoothing),) as pool:
             items = [i for i in range(B)]
             ans = pool.map(LocalCalibrateThresholdComputation.get_both_bootstrapped_posteriors, items, 64)
 
@@ -225,7 +222,8 @@ class LocalCalibrateThresholdComputation:
                     thresh[i][j] = np.NaN
 
         return thresh
-            
+
+
     @staticmethod
     def get_discounted_thresholds(thresh, Post, B, discountonesided, tp):
         threshT = thresh.T

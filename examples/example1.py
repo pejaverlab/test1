@@ -6,7 +6,7 @@ import math
 import time
 import bisect
 from LocalCalibration.tavtigian import get_tavtigian_c, get_tavtigian_thresholds
-from LocalCalibration.configmodule import ConfigModule
+from configmodule import ConfigModule
 from LocalCalibration.gaussiansmoothing import *
 from multiprocessing.pool import Pool
 from LocalCalibration.LocalCalibration import *
@@ -38,12 +38,6 @@ def getParser():
         required=True,
     )
     parser.add_argument(
-        "--data_dir",
-        default=None,
-        type=str,
-        required=True,
-    )
-    parser.add_argument(
         "--outdir",
         default=None,
         type=str,
@@ -56,14 +50,10 @@ def getParser():
         required=True,
     )
     parser.add_argument(
-        "--PU_data_file",
+        "--unlabelled_data_file",
         default=None,
         type=str,
-        required=True,
-    )
-    parser.add_argument(
-        "--clamp",
-        action='store_true',
+        required=False,
     )
     parser.add_argument(
         "--reverse",
@@ -110,17 +100,28 @@ def storeResults(outdir, tool, thresholds, posteriors_p, posteriors_b, pthresh, 
 
 
 
+
 def main():
 
     parser = getParser()
     args = parser.parse_args()
-    configmodule = ConfigModule()
-    configmodule.load_config(args.configfile)
+    tool = args.tool
+    labeldatafile = args.labelled_data_file
+    udatafile = args.unlabelled_data_file
+    reverse = args.reverse
+    configfile = args.configfile
+    outdir = args.outdir
 
+    configmodule = ConfigModule()
+    configmodule.load_config(configfile)
     B = configmodule.B
     discountonesided = configmodule.discountonesided
     windowclinvarpoints = configmodule.windowclinvarpoints
     windowgnomadfraction = configmodule.windowgnomadfraction
+    gaussian_smoothing = configmodule.gaussian_smoothing
+    data_smoothing = configmodule.data_smoothing
+    if data_smoothing:
+        assert udatafile is not None
 
     alpha = None
     c = None
@@ -136,36 +137,25 @@ def main():
 
     print(c)
 
-    tool = args.tool
-    datadir = args.data_dir;
-    labeldatafile = args.labelled_data_file
-    pudatafile = args.PU_data_file
-    reverse = args.reverse
-    clamp = args.clamp
-    gaussian_smoothing = configmodule.gaussian_smoothing
-    pu_data_available = configmodule.pu_data_available
-    if pu_data_available:
-        assert pudatafile is not None
 
-    labelleddata = load_data(os.path.join(datadir,labeldatafile))
+
+    labelleddata = load_data(labeldatafile)
     x = [float(e[0]) for e in labelleddata]
     y = [int(e[1]) for e in labelleddata]
-    pudata = load_data(os.path.join(datadir,pudatafile))
-    g = [float(e[0]) for e in pudata if e[1] == '0']
+    udata = load_data(udatafile)
+    g = [float(e[0]) for e in udata if e[1] == '0']
 
     x = np.array(x)
     y = np.array(y)
     g = np.sort(np.array(g))
     xg = np.concatenate((x,g))
 
-    w = ( (1-alpha)*((y==1).sum()) ) /  ( alpha*((y==0).sum()) )    
-
-
-    calib = LocalCalibration(alpha, c, reverse, clamp, windowclinvarpoints, windowgnomadfraction, gaussian_smoothing, )
+    calib = LocalCalibration(alpha, c, reverse, windowclinvarpoints, windowgnomadfraction, gaussian_smoothing, data_smoothing)
     thresholds, posteriors_p = calib.fit(x,y,g,alpha)
     posteriors_b = 1 - np.flip(posteriors_p)
+    
 
-    calib = LocalCalibrateThresholdComputation(alpha, c, reverse, clamp, windowclinvarpoints, windowgnomadfraction, gaussian_smoothing, )
+    calib = LocalCalibrateThresholdComputation(alpha, c, reverse, windowclinvarpoints, windowgnomadfraction, gaussian_smoothing, data_smoothing)
     start = time.time()
     _, posteriors_p_bootstrap = calib.get_both_bootstrapped_posteriors_parallel(x,y, g, 1000, alpha, thresholds)
     end = time.time()
@@ -183,8 +173,9 @@ def main():
     DiscountedThresholdP = LocalCalibrateThresholdComputation.get_discounted_thresholds(pthresh, Post_p, B, discountonesided, 'pathogenic')
     DiscountedThresholdB = LocalCalibrateThresholdComputation.get_discounted_thresholds(bthresh, Post_b, B, discountonesided, 'benign')
 
-    storeResults(args.outdir, tool, thresholds, posteriors_p, posteriors_b, pthresh, bthresh, DiscountedThresholdP, DiscountedThresholdB)
-
+    storeResults(outdir, tool, thresholds, posteriors_p, posteriors_b, pthresh, bthresh, DiscountedThresholdP, DiscountedThresholdB)
+    
+    print("Thresholds: ", pthresh)
     print("Discounted Thresholds: ", DiscountedThresholdP)
 
 
