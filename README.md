@@ -1,6 +1,12 @@
 This is a python version of [clingen-svi-comp_calibration](https://github.com/vpejaver/clingen-svi-comp_calibration)
 
 
+To run the code:
+```
+python main.py --configfile "$PATH_TO_CONFIG_FILE" --tool="$TOOL_NAME" --labelled_data_file "$PATH_TO_LABELLED_DATA_FILE" --unlabelled_data_file "$PATH_TO_UNBALELLED_DATA_FILE" --outdir="out"
+```
+The results are stored in "out" directory.
+
 
 Description of Tuning Parameters defined in config.ini are as follows:
 ```python
