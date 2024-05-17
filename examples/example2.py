@@ -5,21 +5,32 @@ import numpy as np
 import math
 import time
 import bisect
-from LocalCalibration.tavtigian import get_tavtigian_c, get_tavtigian_thresholds
-from LocalCalibration.configmodule import ConfigModule
+from Tavtigian.tavtigian import get_tavtigian_c, get_tavtigian_thresholds
+from configmodule import ConfigModule
 from LocalCalibration.gaussiansmoothing import *
 from multiprocessing.pool import Pool
-from LocalCalibration.LocalCalibration import *
+from LocalCalibration.LocalCalibration import LocalCalibration
 import time
 
 
-def load_data(filepath):
+def load_labelled_data(filepath):
     data = None
     with open(filepath, "r") as f:
         reader = csv.reader(f, delimiter='\t')
         data = list(reader)
         f.close()
-    return data
+    x = [float(e[0]) for e in data]
+    y = [int(e[1]) for e in data]
+    return x,y
+
+def load_unlabelled_data(filepath):
+    data = None
+    with open(filepath, "r") as f:
+        reader = csv.reader(f, delimiter='\t')
+        data = list(reader)
+        f.close()
+    g = [float(e[0]) for e in data]
+    return g
 
 
 def getParser():
@@ -38,16 +49,10 @@ def getParser():
         required=True,
     )
     parser.add_argument(
-        "--data_dir",
-        default=None,
-        type=str,
-        required=True,
-    )
-    parser.add_argument(
         "--outdir",
         default=None,
         type=str,
-        required=True,
+        required=False,
     )
     parser.add_argument(
         "--labelled_data_file",
@@ -56,14 +61,10 @@ def getParser():
         required=True,
     )
     parser.add_argument(
-        "--PU_data_file",
+        "--unlabelled_data_file",
         default=None,
         type=str,
-        required=True,
-    )
-    parser.add_argument(
-        "--clamp",
-        action='store_true',
+        required=False,
     )
     parser.add_argument(
         "--reverse",
@@ -78,13 +79,23 @@ def main():
 
     parser = getParser()
     args = parser.parse_args()
-    configmodule = ConfigModule()
-    configmodule.load_config(args.configfile)
+    tool = args.tool
+    labeldatafile = args.labelled_data_file
+    udatafile = args.unlabelled_data_file
+    reverse = args.reverse
+    configfile = args.configfile
+    outdir = args.outdir
 
+    configmodule = ConfigModule()
+    configmodule.load_config(configfile)
     B = configmodule.B
     discountonesided = configmodule.discountonesided
     windowclinvarpoints = configmodule.windowclinvarpoints
     windowgnomadfraction = configmodule.windowgnomadfraction
+    gaussian_smoothing = configmodule.gaussian_smoothing
+    data_smoothing = configmodule.data_smoothing
+    if data_smoothing:
+        assert udatafile is not None
 
     alpha = None
     c = None
@@ -98,33 +109,17 @@ def main():
         alpha = configmodule.alpha
         c = get_tavtigian_c(alpha)
 
-    print(c)
-
-    tool = args.tool
-    datadir = args.data_dir;
-    labeldatafile = args.labelled_data_file
-    pudatafile = args.PU_data_file
-    reverse = args.reverse
-    clamp = args.clamp
-    gaussian_smoothing = configmodule.gaussian_smoothing
-
-    labelleddata = load_data(os.path.join(datadir,labeldatafile))
-    x = [float(e[0]) for e in labelleddata]
-    y = [int(e[1]) for e in labelleddata]
-    pudata = load_data(os.path.join(datadir,pudatafile))
-    g = [float(e[0]) for e in pudata if e[1] == '0']
+    x,y = load_labelled_data(labeldatafile)
+    g = load_unlabelled_data(udatafile)
 
     x = np.array(x)
     y = np.array(y)
     g = np.sort(np.array(g))
     xg = np.concatenate((x,g))
 
-    w = ( (1-alpha)*((y==1).sum()) ) /  ( alpha*((y==0).sum()) )    
-
-    calib = LocalCalibration(alpha, c, reverse, clamp, windowclinvarpoints, windowgnomadfraction, gaussian_smoothing)
+    calib = LocalCalibration(alpha, c, reverse, windowclinvarpoints, windowgnomadfraction, gaussian_smoothing, data_smoothing)
     thresholds, posteriors_p = calib.fit(x,y,g,alpha)
-
-    print(thresholds, posterior_p)
+    posteriors_b = 1 - np.flip(posteriors_p)
 
 
 

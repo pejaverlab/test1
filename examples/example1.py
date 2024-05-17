@@ -45,15 +45,15 @@ def getParser():
     )
     parser.add_argument(
         "--tool",
-        default=None,
+        default="Model",
         type=str,
-        required=True,
+        required=False,
     )
     parser.add_argument(
         "--outdir",
-        default=None,
+        default="out",
         type=str,
-        required=True,
+        required=False,
     )
     parser.add_argument(
         "--labelled_data_file",
@@ -122,6 +122,9 @@ def main():
     configfile = args.configfile
     outdir = args.outdir
 
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
+
     configmodule = ConfigModule()
     configmodule.load_config(configfile)
     B = configmodule.B
@@ -145,14 +148,10 @@ def main():
         alpha = configmodule.alpha
         c = get_tavtigian_c(alpha)
 
-    print(c)
-
-
 
     x,y = load_labelled_data(labeldatafile)
     g = load_unlabelled_data(udatafile)
-    print(g[:100])
-    #return
+
 
     x = np.array(x)
     y = np.array(y)
@@ -162,14 +161,9 @@ def main():
     calib = LocalCalibration(alpha, c, reverse, windowclinvarpoints, windowgnomadfraction, gaussian_smoothing, data_smoothing)
     thresholds, posteriors_p = calib.fit(x,y,g,alpha)
     posteriors_b = 1 - np.flip(posteriors_p)
-    
 
     calib = LocalCalibrateThresholdComputation(alpha, c, reverse, windowclinvarpoints, windowgnomadfraction, gaussian_smoothing, data_smoothing)
-    start = time.time()
-    _, posteriors_p_bootstrap = calib.get_both_bootstrapped_posteriors_parallel(x,y, g, 1000, alpha, thresholds)
-    end = time.time()
-    print("time: " ,end - start)
-
+    _, posteriors_p_bootstrap = calib.get_both_bootstrapped_posteriors_parallel(x,y, g, B, alpha, thresholds)
 
     Post_p, Post_b = get_tavtigian_thresholds(c, alpha)
 
