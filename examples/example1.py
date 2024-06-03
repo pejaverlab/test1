@@ -20,8 +20,8 @@ def load_labelled_data(filepath):
         reader = csv.reader(f, delimiter='\t')
         data = list(reader)
         f.close()
-    x = [float(e[0]) for e in data]
-    y = [int(e[1]) for e in data]
+    x = np.array([float(e[0]) for e in data])
+    y = np.array([int(e[1]) for e in data])
     return x,y
 
 def load_unlabelled_data(filepath):
@@ -30,7 +30,7 @@ def load_unlabelled_data(filepath):
         reader = csv.reader(f, delimiter='\t')
         data = list(reader)
         f.close()
-    g = [float(e[0]) for e in data]
+    g = np.array([float(e[0]) for e in data])
     return g
 
 
@@ -151,11 +151,8 @@ def main():
 
     x,y = load_labelled_data(labeldatafile)
     g = load_unlabelled_data(udatafile)
-
-
-    x = np.array(x)
-    y = np.array(y)
-    g = np.sort(np.array(g))
+    
+    g = np.sort(g)
     xg = np.concatenate((x,g))
 
     calib = LocalCalibration(alpha, c, reverse, windowclinvarpoints, windowgnomadfraction, gaussian_smoothing, data_smoothing)
@@ -175,6 +172,12 @@ def main():
 
     DiscountedThresholdP = LocalCalibrateThresholdComputation.get_discounted_thresholds(pthresh, Post_p, B, discountonesided, 'pathogenic')
     DiscountedThresholdB = LocalCalibrateThresholdComputation.get_discounted_thresholds(bthresh, Post_b, B, discountonesided, 'benign')
+
+    if args.reverse:
+        pthresh = -pthresh
+        bthresh = -bthresh
+        DiscountedThresholdP = -DiscountedThresholdP
+        DiscountedThresholdB = -DiscountedThresholdB
 
     storeResults(outdir, tool, thresholds, posteriors_p, posteriors_b, pthresh, bthresh, DiscountedThresholdP, DiscountedThresholdB)
     
