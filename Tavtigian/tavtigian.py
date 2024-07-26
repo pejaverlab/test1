@@ -20,10 +20,24 @@ def get_tavtigian_c(prior):
 
 def get_tavtigian_thresholds(c, alpha):
 
-    Post_p = np.zeros(4)
-    Post_b = np.zeros(4)
-    for j in range(4):
-        Post_p[j] = c ** (1 / 2 ** (j)) * alpha / ((c ** (1 / 2 ** (j)) - 1) * alpha + 1);
-        Post_b[j] = (c ** (1 / 2 ** (j))) * (1 - alpha) /(((c ** (1 / 2 ** (j))) - 1) * (1 - alpha) + 1);
+    Post_p = np.zeros(5)
+    Post_b = np.zeros(5)
+
+    Post_p[0] = c ** (8 / 8) * alpha / ((c ** (8 / 8) - 1) * alpha + 1);
+    Post_p[1] = c ** (4 / 8) * alpha / ((c ** (4 / 8) - 1) * alpha + 1);
+    Post_p[2] = c ** (3 / 8) * alpha / ((c ** (3 / 8) - 1) * alpha + 1);
+    Post_p[3] = c ** (2 / 8) * alpha / ((c ** (2 / 8) - 1) * alpha + 1);
+    Post_p[4] = c ** (1 / 8) * alpha / ((c ** (1 / 8) - 1) * alpha + 1);
+
+    Post_b[0] = (c ** (8 / 8)) * (1 - alpha) /(((c ** (8 / 8)) - 1) * (1 - alpha) + 1);
+    Post_b[1] = (c ** (4 / 8)) * (1 - alpha) /(((c ** (4 / 8)) - 1) * (1 - alpha) + 1);
+    Post_b[2] = (c ** (3 / 8)) * (1 - alpha) /(((c ** (3 / 8)) - 1) * (1 - alpha) + 1);
+    Post_b[3] = (c ** (2 / 8)) * (1 - alpha) /(((c ** (2 / 8)) - 1) * (1 - alpha) + 1);
+    Post_b[4] = (c ** (1 / 8)) * (1 - alpha) /(((c ** (1 / 8)) - 1) * (1 - alpha) + 1);
+
+    #for j in range(4):                                                                                                                                                                                                                 
+    #    Post_p[j] = c ** (1 / 2 ** (j)) * alpha / ((c ** (1 / 2 ** (j)) - 1) * alpha + 1);                                                                                                                                             
+    #    Post_b[j] = (c ** (1 / 2 ** (j))) * (1 - alpha) /(((c ** (1 / 2 ** (j))) - 1) * (1 - alpha) + 1);                                                                                                                              
 
     return Post_p, Post_b
+

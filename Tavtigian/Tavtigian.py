@@ -75,7 +75,7 @@ class LocalCalibrateThresholdComputation:
             thresholds = LocalCalibration.compute_thresholds(xg)
 
         ans = None
-        with Pool(192,initializer = self.initialize, initargs=(x, y, g, w, thresholds, self.windowclinvarpoints, self.windowgnomadfraction, B, self.gaussian_smoothing, self.pu_smoothing),) as pool:
+        with Pool(192,initializer = LocalCalibrateThresholdComputation.initialize, initargs=(x, y, g, w, thresholds, self.windowclinvarpoints, self.windowgnomadfraction, B, self.gaussian_smoothing, self.pu_smoothing),) as pool:
             items = [i for i in range(B)]
             ans = pool.map(LocalCalibrateThresholdComputation.get_both_bootstrapped_posteriors, items, 64)
 
